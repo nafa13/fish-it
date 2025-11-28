@@ -217,6 +217,19 @@ class _DashboardPageState extends State<DashboardPage> {
   final String broker = 'broker.emqx.io';
   bool isConnected = false;
   double suhuAir = 0;
+  Future<void> simpanKeDatabase(double suhu) async {
+    try {
+      final response = await http.post(
+        Uri.parse("http://192.168.1.46/fishfeeder_api/insert_suhu.php"),
+        body: {"suhu": suhu.toString()},
+      );
+
+      print("API Response: ${response.body}");
+    } catch (e) {
+      print("Gagal kirim ke API: $e");
+    }
+  }
+
   List<FlSpot> dataGrafik = [];
   double waktuGrafik = 0;
 
@@ -228,10 +241,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> connectMQTT() async {
     client = MqttBrowserClient(
-      'ws://$broker/mqtt',
+      'ws://broker.emqx.io:8083/mqtt',
       'flutter_client_${Random().nextInt(1000)}',
     );
-    client.port = 8083;
+
     client.keepAlivePeriod = 60;
     client.onDisconnected = () => setState(() => isConnected = false);
 
@@ -249,11 +262,15 @@ class _DashboardPageState extends State<DashboardPage> {
 
           if (c[0].topic == 'ikan/monitor/suhu') {
             double val = double.tryParse(message) ?? 0;
+
             setState(() {
               suhuAir = val;
               if (dataGrafik.length > 10) dataGrafik.removeAt(0);
               dataGrafik.add(FlSpot(waktuGrafik++, val));
             });
+
+            // ⬅⬅ TAMBAHKAN INI
+            simpanKeDatabase(val);
           }
         });
       }
