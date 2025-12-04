@@ -15,7 +15,7 @@ class _LoginPageState extends State<LoginPage> {
 
   // !!! PENTING: GANTI IP INI SESUAI LAPTOP !!!
   // Contoh: 'http://192.168.1.10/fishfeeder_api/login.php'
-  final String apiUrl = 'http://192.168.1.XX/fish_api/login.php';
+  final String apiUrl = 'http://172.20.10.2/fish_api/login.php';
 
   void login() async {
     try {

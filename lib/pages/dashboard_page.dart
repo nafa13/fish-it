@@ -139,7 +139,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> simpanKeDatabase(double suhu) async {
     // GANTI IP INI DENGAN IP LAPTOP KAMU
-    final String url = "http://192.168.1.10/fishfeeder_api/insert_suhu.php";
+    final String url = "http://172.20.10.2/fish_api/insert_suhu.php";
     try {
       await http.post(Uri.parse(url), body: {"suhu": suhu.toString()});
       print("Data tersimpan ke database");
