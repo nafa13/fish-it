@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
@@ -39,35 +38,38 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> connectMQTT() async {
-    // Setup Client sesuai platform (Web atau HP)
+    // Setup Client: Menggunakan HiveMQ
     if (kIsWeb) {
       client = MqttBrowserClient(
-        'ws://broker.emqx.io/mqtt',
+        'wss://broker.hivemq.com/mqtt',
         'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
       );
-      (client as MqttBrowserClient).port = 8083;
+      (client as MqttBrowserClient).port = 8000;
     } else {
       client = MqttServerClient(
-        'broker.emqx.io',
+        'broker.hivemq.com',
         'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
       );
       client.port = 1883;
     }
 
-    client.logging(on: false);
+    client.logging(on: true);
     client.keepAlivePeriod = 20;
     client.onDisconnected = onDisconnected;
 
     final connMess = MqttConnectMessage()
-        .withClientIdentifier('flutter_fish_it_id')
+        .withClientIdentifier(
+          'flutter_fish_it_id_${DateTime.now().millisecondsSinceEpoch}',
+        )
         .startClean()
         .withWillQos(MqttQos.atLeastOnce);
     client.connectionMessage = connMess;
 
     try {
+      print('Sedang menghubungkan ke HiveMQ...');
       await client.connect();
     } catch (e) {
-      print('Exception: $e');
+      print('Exception Connection: $e');
       client.disconnect();
     }
 
@@ -75,12 +77,10 @@ class _DashboardPageState extends State<DashboardPage> {
       setState(() {
         isConnected = true;
       });
-      print('MQTT Connected');
+      print('MQTT Connected ke HiveMQ!');
 
-      // Subscribe ke topik suhu
       client.subscribe("ikan/monitor/suhu", MqttQos.atMostOnce);
 
-      // Mendengarkan pesan masuk
       client.updates!.listen((List<MqttReceivedMessage<MqttMessage?>> c) {
         final MqttPublishMessage recMess = c[0].payload as MqttPublishMessage;
         final String pt = MqttPublishPayload.bytesToStringAsString(
@@ -94,16 +94,12 @@ class _DashboardPageState extends State<DashboardPage> {
           if (suhuBaru != null) {
             setState(() {
               suhuAir = suhuBaru;
-
-              // Update Grafik
               waktuGrafik++;
               if (dataGrafik.length > 10) {
                 dataGrafik.removeAt(0);
               }
               dataGrafik.add(FlSpot(waktuGrafik, suhuAir));
             });
-
-            // Simpan ke Database
             simpanKeDatabase(suhuBaru);
           }
         }
@@ -121,15 +117,19 @@ class _DashboardPageState extends State<DashboardPage> {
     print('MQTT Disconnected');
   }
 
+  // --- PERBAIKAN DI SINI ---
   void kirimPerintah(String pesan) {
     if (isConnected) {
       final builder = MqttClientPayloadBuilder();
       builder.addString(pesan);
+
+      // Menggunakan publishMessage (bukan client.publish)
       client.publishMessage(
         "ikan/pakan/perintah",
         MqttQos.atMostOnce,
         builder.payload!,
       );
+      print("Mengirim perintah: $pesan");
     } else {
       ScaffoldMessenger.of(
         context,
@@ -138,8 +138,10 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> simpanKeDatabase(double suhu) async {
-    // GANTI IP INI DENGAN IP LAPTOP KAMU
-    final String url = "http://172.20.10.2/fish_api/insert_suhu.php";
+    // Pastikan IP Address ini BENAR sesuai laptop kamu
+    final String url =
+        "http://192.168.1.XX/fishfeeder_api/insert_suhu.php"; // <--- CEK LAGI IP NYA
+
     try {
       await http.post(Uri.parse(url), body: {"suhu": suhu.toString()});
       print("Data tersimpan ke database");
@@ -150,7 +152,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    // List halaman untuk navigasi bawah
     final List<Widget> pages = [
       MonitoringTab(suhuAir: suhuAir, dataGrafik: dataGrafik),
       ControllingTab(onCommand: (cmd) => kirimPerintah(cmd)),
@@ -163,9 +164,21 @@ class _DashboardPageState extends State<DashboardPage> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
-            child: CircleAvatar(
-              radius: 8,
-              backgroundColor: isConnected ? Colors.green : Colors.red,
+            child: Row(
+              children: [
+                Text(
+                  isConnected ? "ONLINE" : "OFFLINE",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isConnected ? Colors.green : Colors.red,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  radius: 6,
+                  backgroundColor: isConnected ? Colors.green : Colors.red,
+                ),
+              ],
             ),
           ),
         ],
