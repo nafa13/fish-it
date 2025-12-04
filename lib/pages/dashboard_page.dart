@@ -38,30 +38,35 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> connectMQTT() async {
-    // Setup Client: Menggunakan HiveMQ
+    // ID Unik agar tidak bentrok dengan user lain
+    String clientId = 'flutter_fish_${DateTime.now().millisecondsSinceEpoch}';
+
+    // --- KONFIGURASI KONEKSI HIVEMQ ---
     if (kIsWeb) {
+      // SETTING UNTUK WEB (CHROME) - Pakai WebSocket
       client = MqttBrowserClient(
-        'wss://broker.hivemq.com/mqtt',
-        'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
+        'wss://broker.hivemq.com/mqtt', // Alamat WebSocket HiveMQ
+        clientId,
       );
-      (client as MqttBrowserClient).port = 8000;
+      (client as MqttBrowserClient).port = 8000; // Port WebSocket
     } else {
+      // SETTING UNTUK HP (ANDROID/IOS) - Pakai TCP
       client = MqttServerClient(
-        'broker.hivemq.com',
-        'flutter_client_${DateTime.now().millisecondsSinceEpoch}',
+        'broker.hivemq.com', // Alamat Server
+        clientId,
       );
-      client.port = 1883;
+      client.port = 1883; // Port TCP
     }
 
+    // Konfigurasi agar koneksi lebih stabil
     client.logging(on: true);
-    client.keepAlivePeriod = 20;
+    client.keepAlivePeriod = 60;
     client.onDisconnected = onDisconnected;
+    client.setProtocolV311(); // Gunakan protokol standar 3.1.1
 
     final connMess = MqttConnectMessage()
-        .withClientIdentifier(
-          'flutter_fish_it_id_${DateTime.now().millisecondsSinceEpoch}',
-        )
-        .startClean()
+        .withClientIdentifier(clientId)
+        .startClean() // Bersihkan sesi lama
         .withWillQos(MqttQos.atLeastOnce);
     client.connectionMessage = connMess;
 
@@ -69,7 +74,7 @@ class _DashboardPageState extends State<DashboardPage> {
       print('Sedang menghubungkan ke HiveMQ...');
       await client.connect();
     } catch (e) {
-      print('Exception Connection: $e');
+      print('Gagal Konek: $e');
       client.disconnect();
     }
 
@@ -77,53 +82,60 @@ class _DashboardPageState extends State<DashboardPage> {
       setState(() {
         isConnected = true;
       });
-      print('MQTT Connected ke HiveMQ!');
+      print('BERHASIL TERHUBUNG KE HIVEMQ!');
 
+      // Subscribe ke topik monitoring
       client.subscribe("ikan/monitor/suhu", MqttQos.atMostOnce);
 
+      // Mendengarkan pesan masuk
       client.updates!.listen((List<MqttReceivedMessage<MqttMessage?>> c) {
         final MqttPublishMessage recMess = c[0].payload as MqttPublishMessage;
         final String pt = MqttPublishPayload.bytesToStringAsString(
           recMess.payload.message,
         );
 
-        print('Topik: ${c[0].topic}, Pesan: $pt');
+        print('Pesan Masuk [${c[0].topic}]: $pt');
 
         if (c[0].topic == "ikan/monitor/suhu") {
           double? suhuBaru = double.tryParse(pt);
           if (suhuBaru != null) {
             setState(() {
               suhuAir = suhuBaru;
+
+              // Update Grafik
               waktuGrafik++;
               if (dataGrafik.length > 10) {
                 dataGrafik.removeAt(0);
               }
               dataGrafik.add(FlSpot(waktuGrafik, suhuAir));
             });
+
+            // Simpan ke Database
             simpanKeDatabase(suhuBaru);
           }
         }
       });
     } else {
-      print('MQTT Connection Failed');
+      print('Koneksi Gagal - Status: ${client.connectionStatus!.state}');
       client.disconnect();
     }
   }
 
   void onDisconnected() {
-    setState(() {
-      isConnected = false;
-    });
-    print('MQTT Disconnected');
+    if (mounted) {
+      setState(() {
+        isConnected = false;
+      });
+    }
+    print('MQTT Terputus (Disconnected)');
   }
 
-  // --- PERBAIKAN DI SINI ---
   void kirimPerintah(String pesan) {
     if (isConnected) {
       final builder = MqttClientPayloadBuilder();
       builder.addString(pesan);
 
-      // Menggunakan publishMessage (bukan client.publish)
+      // Publish perintah ke topik yang didengar Arduino
       client.publishMessage(
         "ikan/pakan/perintah",
         MqttQos.atMostOnce,
@@ -131,20 +143,22 @@ class _DashboardPageState extends State<DashboardPage> {
       );
       print("Mengirim perintah: $pesan");
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("MQTT belum terhubung!")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("MQTT belum terhubung! Tunggu sebentar..."),
+        ),
+      );
     }
   }
 
   Future<void> simpanKeDatabase(double suhu) async {
-    // Pastikan IP Address ini BENAR sesuai laptop kamu
-    final String url =
-        "http://192.168.1.XX/fishfeeder_api/insert_suhu.php"; // <--- CEK LAGI IP NYA
+    // SAYA SAMAKAN IP DENGAN HALAMAN LOGIN KAMU (172.20.10.2)
+    // Pastikan folder di server bernama 'fish_api'
+    final String url = "http://172.20.10.2/fish_api/insert_suhu.php";
 
     try {
       await http.post(Uri.parse(url), body: {"suhu": suhu.toString()});
-      print("Data tersimpan ke database");
+      print("Data tersimpan ke database: $suhu");
     } catch (e) {
       print("Gagal simpan DB: $e");
     }
@@ -170,7 +184,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   isConnected ? "ONLINE" : "OFFLINE",
                   style: TextStyle(
                     fontSize: 12,
-                    color: isConnected ? Colors.green : Colors.red,
+                    fontWeight: FontWeight.bold,
+                    color: isConnected ? Colors.greenAccent : Colors.redAccent,
                   ),
                 ),
                 const SizedBox(width: 8),
