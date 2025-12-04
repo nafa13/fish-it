@@ -13,8 +13,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _user = TextEditingController();
   final TextEditingController _pass = TextEditingController();
 
-  // !!! PENTING: GANTI IP INI SESUAI LAPTOP !!!
-  // Contoh: 'http://192.168.1.10/fishfeeder_api/login.php'
+  // URL API (Pastikan sama dengan dashboard_page.dart)
   final String apiUrl = 'http://172.20.10.2/fish_api/login.php';
 
   void login() async {
@@ -42,8 +41,7 @@ class _LoginPageState extends State<LoginPage> {
         }
       }
     } catch (e) {
-      // Bypass untuk testing jika API belum siap/koneksi gagal
-      // Username: admin, Password: admin
+      // Mode Bypass (Jika server mati)
       if (_user.text == "admin" && _pass.text == "admin") {
         if (mounted) {
           Navigator.pushReplacement(
@@ -72,9 +70,7 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // PERBAIKAN DI SINI: Menggunakan Icons.waves
               const Icon(Icons.waves, size: 80, color: Colors.cyanAccent),
-
               const SizedBox(height: 20),
               const Text(
                 "FISH IT LOGIN",

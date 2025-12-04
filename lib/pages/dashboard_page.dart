@@ -38,36 +38,39 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> connectMQTT() async {
-    // ID Unik agar tidak bentrok dengan user lain
+    // ID Unik Client
     String clientId = 'flutter_fish_${DateTime.now().millisecondsSinceEpoch}';
 
-    // --- KONFIGURASI KONEKSI HIVEMQ ---
-    if (kIsWeb) {
-      // SETTING UNTUK WEB (CHROME) - Pakai WebSocket
-      client = MqttBrowserClient(
-        'wss://broker.hivemq.com/mqtt', // Alamat WebSocket HiveMQ
-        clientId,
-      );
-      (client as MqttBrowserClient).port = 8000; // Port WebSocket
-    } else {
-      // SETTING UNTUK HP (ANDROID/IOS) - Pakai TCP
-      client = MqttServerClient(
-        'broker.hivemq.com', // Alamat Server
-        clientId,
-      );
-      client.port = 1883; // Port TCP
-    }
+    // --- 1. KONFIGURASI SERVER HIVEMQ ---
+    client = MqttBrowserClient(
+      'wss://a1386989f7a14008a8acd720db8419ea.s1.eu.hivemq.cloud:8884/mqtt',
+      '',
+    );
 
-    // Konfigurasi agar koneksi lebih stabil
+    client.setProtocolV311();
+
+    // --- 2. PENGATURAN KONEKSI ---
     client.logging(on: true);
     client.keepAlivePeriod = 60;
+
     client.onDisconnected = onDisconnected;
-    client.setProtocolV311(); // Gunakan protokol standar 3.1.1
+    client.onConnected = onConnected;
+
+    client.port = 8884;
 
     final connMess = MqttConnectMessage()
         .withClientIdentifier(clientId)
-        .startClean() // Bersihkan sesi lama
+        .authenticateAs(
+          "hivemq.webclient.1764855566492",
+          "2zl8gsSOApYL>C*?a<94",
+        )
+        .withWillTopic(
+          'willtopic',
+        ) // If you set this you must set a will message
+        .withWillMessage('My Will message')
+        .startClean() // Non persistent session for testing
         .withWillQos(MqttQos.atLeastOnce);
+    print('EXAMPLE::Mosquitto client connecting....');
     client.connectionMessage = connMess;
 
     try {
@@ -78,13 +81,14 @@ class _DashboardPageState extends State<DashboardPage> {
       client.disconnect();
     }
 
+    // --- 3. CEK STATUS & SUBSCRIBE ---
     if (client.connectionStatus!.state == MqttConnectionState.connected) {
       setState(() {
         isConnected = true;
       });
       print('BERHASIL TERHUBUNG KE HIVEMQ!');
 
-      // Subscribe ke topik monitoring
+      // Subscribe ke topik (Harus sama dengan Arduino)
       client.subscribe("ikan/monitor/suhu", MqttQos.atMostOnce);
 
       // Mendengarkan pesan masuk
@@ -94,7 +98,7 @@ class _DashboardPageState extends State<DashboardPage> {
           recMess.payload.message,
         );
 
-        print('Pesan Masuk [${c[0].topic}]: $pt');
+        print('Topik: ${c[0].topic}, Pesan: $pt');
 
         if (c[0].topic == "ikan/monitor/suhu") {
           double? suhuBaru = double.tryParse(pt);
@@ -121,13 +125,17 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  void onConnected() {
+    print(' Client connection was sucessful');
+  }
+
   void onDisconnected() {
     if (mounted) {
       setState(() {
         isConnected = false;
       });
     }
-    print('MQTT Terputus (Disconnected)');
+    print('MQTT Terputus');
   }
 
   void kirimPerintah(String pesan) {
@@ -153,7 +161,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> simpanKeDatabase(double suhu) async {
     // SAYA SAMAKAN IP DENGAN HALAMAN LOGIN KAMU (172.20.10.2)
-    // Pastikan folder di server bernama 'fish_api'
+    // Dan folder 'fish_api' agar konsisten
     final String url = "http://172.20.10.2/fish_api/insert_suhu.php";
 
     try {
@@ -181,7 +189,7 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Row(
               children: [
                 Text(
-                  isConnected ? "ONLINE" : "OFFLINE",
+                  isConnected ? "ONLINE (HiveMQ)" : "OFFLINE",
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
