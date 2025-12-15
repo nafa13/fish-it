@@ -162,7 +162,8 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> simpanKeDatabase(double suhu) async {
     // SAYA SAMAKAN IP DENGAN HALAMAN LOGIN KAMU (172.20.10.2)
     // Dan folder 'fish_api' agar konsisten
-    final String url = "http://172.20.10.2/fish_api/insert_suhu.php";
+    final String url =
+        "https://9ae1dbd1801a.ngrok-free.app/fish_api/insert_suhu.php";
 
     try {
       await http.post(Uri.parse(url), body: {"suhu": suhu.toString()});

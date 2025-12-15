@@ -14,7 +14,8 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _pass = TextEditingController();
 
   // URL API (Pastikan sama dengan dashboard_page.dart)
-  final String apiUrl = 'http://172.20.10.2/fish_api/login.php';
+  final String apiUrl =
+      'https://9ae1dbd1801a.ngrok-free.app/fish_api/login.php';
 
   void login() async {
     try {
